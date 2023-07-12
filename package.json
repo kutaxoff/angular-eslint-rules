@@ -1,5 +1,5 @@
 {
-  "name": "@erengee/angular-eslint-rules",
+  "name": "@erengee/eslint-plugin-angular",
   "version": "16.0.3",
   "description": "ESLint plugin for Angular applications with some additions to @angular-eslint rules",
   "main": "dist/index.js",
@@ -8,7 +8,6 @@
   ],
   "scripts": {
     "build": "tsup src/index.ts --no-splitting --minify",
-    "publish": "npm run build && npm publish dist/index.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
