@@ -1,0 +1,1 @@
+# @erengee/angular-eslint-rules
