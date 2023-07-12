@@ -3,7 +3,7 @@ import type { TSESTree } from '@typescript-eslint/utils';
 import { createESLintRule } from '../utils/create-eslint-rule';
 
 type Options = [{ readonly ignoreClassNamePattern?: string }];
-export type MessageIds = 'explicitInjectableProvidedIn' | 'suggestInjector';
+export type MessageIds = 'explicitInjectableProvidedIn' | 'deprecatedInjectableProvidedIn' | 'suggestInjector';
 export const RULE_NAME = 'explicit-injectable-provided-in';
 const METADATA_PROPERTY_NAME = 'providedIn';
 
@@ -29,7 +29,8 @@ export default createESLintRule<Options, MessageIds>({
         ],
         messages: {
             explicitInjectableProvidedIn: `The \`${METADATA_PROPERTY_NAME}\` property is mandatory for \`Injectables\``,
-            suggestInjector: `Use \`${METADATA_PROPERTY_NAME}: '{{injector}}'\``,
+            deprecatedInjectableProvidedIn: `This value for \`${METADATA_PROPERTY_NAME}\` is deprecated. Use \`\'root\'\`, \`\'platform\'\` or \`null\` instead`,
+            suggestInjector: `Use \`${METADATA_PROPERTY_NAME}: {{injector}}\``,
         },
     },
     defaultOptions: [{}],
@@ -39,30 +40,39 @@ export default createESLintRule<Options, MessageIds>({
             METADATA_PROPERTY_NAME,
         );
         const withoutProvidedInDecorator = `${injectableClassDecorator}:matches([expression.arguments.length=0], [expression.arguments.0.type='ObjectExpression']:not(:has(${providedInMetadataProperty})))`;
-        const deprecatedProvidedInProperty = `${injectableClassDecorator} ${providedInMetadataProperty}:not(:matches([value.type='Identifier'][value.name='undefined'], [value.type='Literal'][value.raw='null'], [value.value='root'], [value.value='platform']))`;
+        const deprecatedProvidedInProperty = `${injectableClassDecorator} ${providedInMetadataProperty}:not(:matches([value.type='Literal'][value.raw='null'], [value.value='root'], [value.value='platform']))`;
         const selectors = [
             withoutProvidedInDecorator,
             deprecatedProvidedInProperty,
         ].join(',');
 
+        const createSuggestion = (node: TSESTree.Decorator | TSESTree.Property) => (['\'root\'', '\'platform\'', null] as const).map((injector) => ({
+            messageId: 'suggestInjector' as MessageIds,
+            fix: (fixer) => {
+                return ASTUtils.isProperty(node)
+                    ? fixer.replaceText(node.value, `${injector}`)
+                    : RuleFixes.getDecoratorPropertyAddFix(
+                        node,
+                        fixer,
+                        `${METADATA_PROPERTY_NAME}: ${injector}`,
+                    ) ?? [];
+            },
+            data: { injector },
+        }))
+
         return {
-            [selectors](node: TSESTree.Decorator | TSESTree.Property) {
+            [withoutProvidedInDecorator](node: TSESTree.Decorator | TSESTree.Property) {
                 context.report({
                     node: ASTUtils.isProperty(node) ? node.value : node,
                     messageId: 'explicitInjectableProvidedIn',
-                    suggest: (['root', 'platform', null, undefined] as const).map((injector) => ({
-                        messageId: 'suggestInjector',
-                        fix: (fixer) => {
-                            return ASTUtils.isProperty(node)
-                                ? fixer.replaceText(node.value, `'${injector}'`)
-                                : RuleFixes.getDecoratorPropertyAddFix(
-                                    node,
-                                    fixer,
-                                    `${METADATA_PROPERTY_NAME}: '${injector}'`,
-                                ) ?? [];
-                        },
-                        data: { injector },
-                    })),
+                    suggest: createSuggestion(node),
+                });
+            },
+            [deprecatedProvidedInProperty](node: TSESTree.Decorator | TSESTree.Property) {
+                context.report({
+                    node: ASTUtils.isProperty(node) ? node.value : node,
+                    messageId: 'deprecatedInjectableProvidedIn',
+                    suggest: createSuggestion(node),
                 });
             },
         };
